@@ -508,48 +508,48 @@ PRE_ROLL → ROLLING → POST_ROLL → RESOLVING → TRADING/BUILDING → END_TU
 ## 10. Implementation Phases
 
 ### Phase 1: Foundation
-- [ ] Initialize Vite + React + TypeScript project
-- [ ] Install and configure Convex, Tailwind CSS
-- [ ] Define Convex schema
-- [ ] Create game lobby (create/join with code)
-- [ ] Implement player management (join, select token, ready up)
+- [x] Initialize Vite + React + TypeScript project
+- [x] Install and configure Convex, Tailwind CSS
+- [x] Define Convex schema
+- [x] Create game lobby (create/join with code)
+- [x] Implement player management (join, select token, ready up)
 
 ### Phase 2: Core Board
-- [ ] Render 40-space board with HTML/CSS Grid
-- [ ] Implement dice rolling
-- [ ] Implement token movement and turn order
-- [ ] Property buying flow
-- [ ] Basic rent collection
-- [ ] Tax space handling
+- [x] Render 40-space board with HTML/CSS Grid
+- [x] Implement dice rolling
+- [x] Implement token movement and turn order
+- [x] Property buying flow
+- [x] Basic rent collection
+- [x] Tax space handling
 
 ### Phase 3: Cards & Special Spaces
-- [ ] Implement Chance (Timo Fortune) deck and card effects
-- [ ] Implement Community Chest (Timo Treasury) deck and card effects
-- [ ] Jail mechanics (enter, exit, doubles tracking)
-- [ ] TimoStart (GO) salary collection
-- [ ] Free Parking (no-op)
+- [x] Implement Chance (Timo Fortune) deck and card effects
+- [x] Implement Community Chest (Timo Treasury) deck and card effects
+- [x] Jail mechanics (enter, exit, doubles tracking)
+- [x] TimoStart (GO) salary collection
+- [x] Free Parking (no-op)
 
 ### Phase 4: Property Management
-- [ ] Building houses and hotels (even building rule)
-- [ ] Mortgaging and unmortgaging
-- [ ] Color group ownership checks
-- [ ] House/hotel supply limits with auction fallback
+- [x] Building houses and hotels (even building rule)
+- [x] Mortgaging and unmortgaging
+- [x] Color group ownership checks
+- [x] House/hotel supply limits with auction fallback
 
 ### Phase 5: Trading & Railway Travel
-- [ ] Player-to-player trade system
-- [ ] Trade modal UI (offer properties, cash, cards)
+- [x] Player-to-player trade system
+- [x] Trade modal UI (offer properties, cash, cards)
 - [ ] Railway travel mechanic (land on owned station → teleport)
-- [ ] Railway travel UI
+- [x] Railway travel UI
 
 ### Phase 6: Bot AI & Polish
-- [ ] Implement easy/medium/hard bot logic
-- [ ] Bot turn automation
+- [x] Implement easy/medium/hard bot logic
+- [x] Bot turn automation
 - [ ] Auction system
 - [ ] Bankruptcy handling
 - [ ] Win condition detection
-- [ ] Chat system
+- [x] Chat system
 - [ ] Sound effects and animations
-- [ ] Mobile responsive layout
+- [x] Mobile responsive layout
 
 ---
 

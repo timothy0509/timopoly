@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brown: #8B4513;
+  --color-lightblue: #87CEEB;
+  --color-pink: #FF69B4;
+  --color-orange: #FFA500;
+  --color-red: #FF0000;
+  --color-yellow: #FFD700;
+  --color-green: #228B22;
+  --color-darkblue: #00008B;
+  --color-timo-gold: #D4AF37;
+  --color-timo-dark: #1a1a2e;
+  --color-timo-panel: #16213e;
+  --color-timo-accent: #e94560;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-timo-dark);
+  color: white;
+}
