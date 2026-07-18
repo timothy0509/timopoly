@@ -189,6 +189,152 @@ export const buyProperty = mutation({
   },
 });
 
+export const startAuction = mutation({
+  args: {
+    gameId: v.id("games"),
+    position: v.number(),
+  },
+  handler: async (ctx, { gameId, position }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+
+    const players = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    const activePlayers = players.filter(p => !p.isBankrupt);
+    const bidderIds = activePlayers.map(p => p._id);
+
+    await ctx.db.patch(gameId, {
+      currentAuction: {
+        propertyPosition: position,
+        highestBid: 0,
+        bidderIds,
+        expiresAt: Date.now() + 60000, // 60s timeout
+      },
+      turnPhase: "trading",
+    });
+
+    return { success: true };
+  },
+});
+
+export const placeBid = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+    amount: v.number(),
+  },
+  handler: async (ctx, { gameId, playerId, amount }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game || !game.currentAuction) throw new Error("No auction active");
+    const auction = game.currentAuction;
+
+    const player = await ctx.db.get(playerId);
+    if (!player) throw new Error("Player not found");
+    if (player.money < amount) throw new Error("Not enough money");
+    if (amount <= auction.highestBid) throw new Error("Bid must be higher");
+    if (!auction.bidderIds.includes(playerId)) throw new Error("Not a bidder");
+
+    await ctx.db.patch(gameId, {
+      currentAuction: {
+        ...auction,
+        highestBid: amount,
+        highestBidderId: playerId,
+      },
+    });
+
+    return { success: true };
+  },
+});
+
+export const passAuction = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, { gameId, playerId }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game || !game.currentAuction) throw new Error("No auction active");
+    const auction = game.currentAuction;
+
+    const remaining = auction.bidderIds.filter(id => id !== playerId);
+
+    // If only one bidder left (the highest bidder), they win
+    if (remaining.length <= 1) {
+      const winnerId = auction.highestBidderId;
+      if (winnerId && auction.highestBid > 0) {
+        // Transfer property to winner
+        const winner = await ctx.db.get(winnerId);
+        if (winner) {
+          await ctx.db.patch(winnerId, {
+            money: winner.money - auction.highestBid,
+            properties: [...winner.properties, auction.propertyPosition],
+          });
+          await ctx.db.patch(gameId, {
+            boardSpaces: game.boardSpaces.map(s =>
+              s.position === auction.propertyPosition ? { ...s, ownerId: winnerId } : s
+            ),
+            currentAuction: undefined,
+            turnPhase: "end_turn",
+          });
+        }
+      } else {
+        // No bids at all - property stays with bank
+        await ctx.db.patch(gameId, {
+          currentAuction: undefined,
+          turnPhase: "end_turn",
+        });
+      }
+      return { ended: true, winnerId: auction.highestBidderId, price: auction.highestBid };
+    }
+
+    await ctx.db.patch(gameId, {
+      currentAuction: {
+        ...auction,
+        bidderIds: remaining,
+      },
+    });
+
+    return { ended: false };
+  },
+});
+
+export const claimAuctionWin = mutation({
+  args: {
+    gameId: v.id("games"),
+  },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game || !game.currentAuction) throw new Error("No auction active");
+    const auction = game.currentAuction;
+
+    // Check if only one bidder remains or auction expired
+    if (auction.bidderIds.length <= 1 || Date.now() > auction.expiresAt) {
+      const winnerId = auction.highestBidderId;
+      if (winnerId && auction.highestBid > 0) {
+        const winner = await ctx.db.get(winnerId);
+        if (winner) {
+          await ctx.db.patch(winnerId, {
+            money: winner.money - auction.highestBid,
+            properties: [...winner.properties, auction.propertyPosition],
+          });
+          await ctx.db.patch(gameId, {
+            boardSpaces: game.boardSpaces.map(s =>
+              s.position === auction.propertyPosition ? { ...s, ownerId: winnerId } : s
+            ),
+            currentAuction: undefined,
+            turnPhase: "end_turn",
+          });
+          return { winnerId, price: auction.highestBid };
+        }
+      }
+      // No winner
+      await ctx.db.patch(gameId, { currentAuction: undefined, turnPhase: "end_turn" });
+      return { winnerId: undefined, price: 0 };
+    }
+
+    throw new Error("Auction still active");
+  },
+});
+
 export const endTurn = mutation({
   args: {
     gameId: v.id("games"),

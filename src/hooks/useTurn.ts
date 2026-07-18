@@ -33,3 +33,19 @@ export function useTryJailDoubles() {
 export function useSendChat() {
   return useMutation(api.turns.sendChat);
 }
+
+export function useStartAuction() {
+  return useMutation(api.turns.startAuction);
+}
+
+export function usePlaceBid() {
+  return useMutation(api.turns.placeBid);
+}
+
+export function usePassAuction() {
+  return useMutation(api.turns.passAuction);
+}
+
+export function useClaimAuctionWin() {
+  return useMutation(api.turns.claimAuctionWin);
+}

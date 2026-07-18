@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -13,6 +14,8 @@ interface Props {
 
 export default function RailwayTravel({ gameId, player, boardSpaces, onClose }: Props) {
   const travel = useMutation(api.railway.railwayTravel);
+  const resolveSpace = useMutation(api.turns.resolveSpace);
+  const [traveling, setTraveling] = useState(false);
 
   const myRails = RAILWAY_POSITIONS.filter(pos => {
     const s = boardSpaces.find(sp => sp.position === pos);
@@ -21,10 +24,13 @@ export default function RailwayTravel({ gameId, player, boardSpaces, onClose }: 
   const destinations = myRails.filter(pos => pos !== player.position);
 
   const handleTravel = async (dest: number) => {
+    setTraveling(true);
     try {
       await travel({ gameId, playerId: player._id as Id<"players">, destination: dest });
+      // Resolve the destination space (rent, card draw, etc.)
+      await resolveSpace({ gameId, playerId: player._id as Id<"players"> });
       onClose();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) { alert(e.message); setTraveling(false); }
   };
 
   return (
@@ -35,11 +41,11 @@ export default function RailwayTravel({ gameId, player, boardSpaces, onClose }: 
           <p className="text-sm text-gray-400 mb-4">Choose a destination railway you own.</p>
           {destinations.length === 0 && <p className="text-gray-500 text-sm">No other railways to travel to.</p>}
           <div className="space-y-2">
-            {destinations.map(pos => {
-              const rail = RAILWAYS.find(r => r.position === pos);
-              return (
-                <button key={pos} onClick={() => handleTravel(pos)}
-                  className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors">
+          {destinations.map(pos => {
+            const rail = RAILWAYS.find(r => r.position === pos);
+            return (
+              <button key={pos} onClick={() => handleTravel(pos)} disabled={traveling}
+                className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors">
                   <div className="font-medium text-sm">{rail?.name}</div>
                   <div className="text-xs text-gray-500">{rail?.description}</div>
                 </button>

@@ -19,6 +19,9 @@ export const railwayTravel = mutation({
     if (!RAILWAY_POSITIONS.includes(player.position)) throw new Error("Not on a railway");
     // Verify destination is a railway
     if (!RAILWAY_POSITIONS.includes(destination)) throw new Error("Not a railway destination");
+    // Verify player owns the current railway
+    const currentSpace = game.boardSpaces.find(s => s.position === player.position);
+    if (!currentSpace || currentSpace.ownerId !== playerId) throw new Error("Don't own current railway");
     // Verify player owns the destination railway
     const destSpace = game.boardSpaces.find(s => s.position === destination);
     if (!destSpace || destSpace.ownerId !== playerId) throw new Error("Don't own destination");
@@ -28,6 +31,9 @@ export const railwayTravel = mutation({
       position: destination,
       hasUsedRailwayTravel: true,
     });
+
+    // Set phase to resolving so the client can trigger resolveSpace on the destination
+    await ctx.db.patch(gameId, { turnPhase: "resolving" });
 
     return { newPosition: destination };
   },

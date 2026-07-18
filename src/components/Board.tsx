@@ -14,6 +14,7 @@ import BuildPanel from "./BuildPanel";
 import RailwayTravel from "./RailwayTravel";
 import JailModal from "./JailModal";
 import ChatPanel from "./ChatPanel";
+import AuctionModal from "./AuctionModal";
 import type { CardDef } from "../types";
 
 interface Props {
@@ -34,6 +35,9 @@ export default function GameBoard({ gameId, playerId }: Props) {
   const useJailCard = useMutation(api.turns.useJailCard);
   const tryJailDoubles = useMutation(api.turns.tryJailDoubles);
   const executeBotTurn = useMutation(api.bots.executeBotTurn);
+  const startAuction = useMutation(api.turns.startAuction);
+  const placeBid = useMutation(api.turns.placeBid);
+  const passAuction = useMutation(api.turns.passAuction);
 
   const [isRolling, setIsRolling] = useState(false);
   const [showProperty, setShowProperty] = useState<number | null>(null);
@@ -124,8 +128,30 @@ export default function GameBoard({ gameId, playerId }: Props) {
   };
 
   const handleDeclineBuy = async () => {
-    await endTurn({ gameId, playerId });
-    setLastResult(null);
+    // Start an auction instead of ending the turn
+    if (lastResult?.position !== undefined) {
+      await startAuction({ gameId, position: me!.position });
+      setLastResult(null);
+    } else {
+      await endTurn({ gameId, playerId });
+      setLastResult(null);
+    }
+  };
+
+  const handleAuctionBid = async (amount: number) => {
+    try {
+      await placeBid({ gameId, playerId, amount });
+    } catch (e: any) { alert(e.message); }
+  };
+
+  const handleAuctionPass = async () => {
+    try {
+      const result = await passAuction({ gameId, playerId });
+      // If auction ended with no bids, end the turn
+      if (result.ended && !result.winnerId) {
+        await endTurn({ gameId, playerId });
+      }
+    } catch (e: any) { alert(e.message); }
   };
 
   const handleDrawCard = async () => {
@@ -338,6 +364,16 @@ export default function GameBoard({ gameId, playerId }: Props) {
       )}
       {showJail && me && (
         <JailModal player={me} onPayFine={handlePayJailFine} onUseCard={handleUseJailCard} onTryDoubles={handleTryDoubles} onClose={() => setShowJail(false)} />
+      )}
+      {game.currentAuction && (
+        <AuctionModal
+          position={game.currentAuction.propertyPosition}
+          players={players}
+          currentPlayerId={playerId}
+          onBid={handleAuctionBid}
+          onPass={handleAuctionPass}
+          highestBid={game.currentAuction.highestBid}
+        />
       )}
     </div>
   );
