@@ -13,7 +13,8 @@ React + TypeScript + Vite + Tailwind CSS v4 + Convex.
 
 - Project uses TypeScript project references (`tsconfig.json` references `tsconfig.app.json` for `src/` and `tsconfig.node.json` for `vite.config.ts`).
 - `tsc -b` (used by `build`) compiles the whole project; prefer it over `tsc --noEmit` for verification.
-- Strict lint-style flags are enabled: `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`, `noFallthroughCasesInSwitch`.
+- Strict lint-style flags: `erasableSyntaxOnly`, `noFallthroughCasesInSwitch`.
+- `noUnusedLocals` and `noUnusedParameters` are **temporarily disabled** while the project is in progress. Re-enable them before shipping to production.
 - `allowImportingTsExtensions` and `noEmit` are on — imports keep `.ts` extensions.
 - `verbatimModuleSyntax` is on — use `import type` for type-only imports.
 
@@ -45,3 +46,17 @@ React + TypeScript + Vite + Tailwind CSS v4 + Convex.
 - No CI workflows or pre-commit hooks.
 - `dist/` is the Vite build output; `tmp-vite/` appears to be a leftover Vite template and is not the main app.
 - The project is a single package, not a monorepo.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

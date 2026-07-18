@@ -136,7 +136,7 @@ export const resolveSpace = mutation({
 
     if (space.type === "chance" || space.type === "treasury") {
       await ctx.db.patch(gameId, { turnPhase: "post_roll" });
-      return { action: "draw_card", deck: space.type };
+      return { action: "draw_card", deck: space.type as "chance" | "treasury" };
     }
 
     // Corner spaces

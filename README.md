@@ -25,6 +25,48 @@ A Timo-themed Monopoly clone set in the world of **Timotopia**. Play online mult
 
 3. Open the app in your browser and create or join a game with a lobby code.
 
+## Environment Variables
+
+The frontend expects a Convex URL at build time.
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_CONVEX_URL` | URL of the Convex deployment the app connects to | `http://localhost:3210` (local dev) |
+
+Local development is already configured via `.env.local` (`VITE_CONVEX_URL=http://localhost:3210`). For a production deployment, set this to your deployed Convex URL.
+
+## Deployment
+
+### 1. Deploy the Convex backend
+
+From the project root, run the Convex deploy command:
+
+```bash
+npx convex deploy
+```
+
+This pushes the schema and functions in `convex/` to a production Convex deployment. Note the deployment URL provided at the end of the process.
+
+### 2. Configure the production frontend URL
+
+Create a production environment file (for example, `.env.production`) or set the variable in your hosting platform:
+
+```bash
+VITE_CONVEX_URL=https://<your-production-convex-url>
+```
+
+### 3. Build the frontend
+
+```bash
+npm run build
+```
+
+Vite bundles the app into the `dist/` directory. The built frontend is static and can be served by any static host (e.g. Vercel, Netlify, Cloudflare Pages, or an S3 bucket).
+
+### 4. Deploy the static build
+
+Upload the contents of the `dist/` folder to your chosen static host. Make sure the production environment variable `VITE_CONVEX_URL` is set at build time so the client connects to the deployed Convex backend.
+
 ## Available Scripts
 
 | Command | Description |
