@@ -104,7 +104,7 @@ export interface GameState {
   _id: string;
   code: string;
   status: GameStatus;
-  hostId: string;
+  hostId?: string;
   currentPlayerIndex: number;
   turnPhase: TurnPhase;
   boardSpaces: BoardSpaceState[];

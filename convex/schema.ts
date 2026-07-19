@@ -5,7 +5,7 @@ export default defineSchema({
   games: defineTable({
     code: v.string(),
     status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
-    hostId: v.id("players"),
+    hostId: v.optional(v.id("players")),
     currentPlayerIndex: v.number(),
     turnPhase: v.union(
       v.literal("pre_roll"),

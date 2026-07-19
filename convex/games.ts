@@ -35,7 +35,6 @@ export const create = mutation({
     const gameId = await ctx.db.insert("games", {
       code,
       status: "lobby",
-      hostId: "" as any,
       currentPlayerIndex: 0,
       turnPhase: "pre_roll",
       boardSpaces,
