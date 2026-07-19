@@ -1,7 +1,19 @@
 import { mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { PROPERTIES, COLOR_GROUPS } from "../src/lib/constants";
+import { PROPERTIES, RAILWAYS, UTILITIES } from "../src/lib/constants";
 import { canBuildHouse, canBuildHotel, ownsColorGroup } from "../src/lib/gameLogic";
+import type { Id } from "./_generated/dataModel";
+
+async function getBoardSpaces(ctx: MutationCtx, gameId: Id<"games">) {
+  const spaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+  spaces.sort((a, b) => a.position - b.position);
+  return spaces;
+}
+
+async function getSpaceByPosition(ctx: MutationCtx, gameId: Id<"games">, position: number) {
+  return await ctx.db.query("boardSpaces").withIndex("by_game_and_position", q => q.eq("gameId", gameId).eq("position", position)).unique();
+}
 
 export const buildHouse = mutation({
   args: {
@@ -12,6 +24,7 @@ export const buildHouse = mutation({
   handler: async (ctx, { gameId, playerId, position }) => {
     const game = await ctx.db.get(gameId);
     if (!game) throw new Error("Game not found");
+    if (game.turnPhase !== "building" && game.turnPhase !== "post_roll") throw new Error("Wrong phase");
     const player = await ctx.db.get(playerId);
     if (!player) throw new Error("Player not found");
 
@@ -20,19 +33,16 @@ export const buildHouse = mutation({
     if (game.houseSupply <= 0) throw new Error("No houses left");
     if (player.money < prop.houseCost) throw new Error("Not enough money");
 
-    const allSpaces = game.boardSpaces;
+    const allSpaces = await getBoardSpaces(ctx, gameId);
     if (!canBuildHouse(position, allSpaces, player)) throw new Error("Cannot build");
 
-    const spaceIdx = allSpaces.findIndex(s => s.position === position);
-    const newSpaces = [...allSpaces];
-    newSpaces[spaceIdx] = { ...newSpaces[spaceIdx], houses: (newSpaces[spaceIdx].houses ?? 0) + 1 };
+    const space = await getSpaceByPosition(ctx, gameId, position);
+    if (!space) throw new Error("Space not found");
 
     await ctx.db.patch(playerId, { money: player.money - prop.houseCost });
-    await ctx.db.patch(gameId, {
-      boardSpaces: newSpaces,
-      houseSupply: game.houseSupply - 1,
-    });
-    return { success: true, houses: newSpaces[spaceIdx].houses };
+    await ctx.db.patch(space._id, { houses: (space.houses ?? 0) + 1 });
+    await ctx.db.patch(gameId, { houseSupply: game.houseSupply - 1 });
+    return { success: true, houses: (space.houses ?? 0) + 1 };
   },
 });
 
@@ -45,6 +55,7 @@ export const buildHotel = mutation({
   handler: async (ctx, { gameId, playerId, position }) => {
     const game = await ctx.db.get(gameId);
     if (!game) throw new Error("Game not found");
+    if (game.turnPhase !== "building" && game.turnPhase !== "post_roll") throw new Error("Wrong phase");
     const player = await ctx.db.get(playerId);
     if (!player) throw new Error("Player not found");
 
@@ -53,17 +64,15 @@ export const buildHotel = mutation({
     if (game.hotelSupply <= 0) throw new Error("No hotels left");
     if (player.money < prop.houseCost) throw new Error("Not enough money");
 
-    const allSpaces = game.boardSpaces;
+    const allSpaces = await getBoardSpaces(ctx, gameId);
     if (!canBuildHotel(position, allSpaces, player)) throw new Error("Cannot build hotel");
 
-    const spaceIdx = allSpaces.findIndex(s => s.position === position);
-    const newSpaces = [...allSpaces];
-    newSpaces[spaceIdx] = { ...newSpaces[spaceIdx], hasHotel: true, houses: 0 };
+    const space = await getSpaceByPosition(ctx, gameId, position);
+    if (!space) throw new Error("Space not found");
 
-    // Return 4 houses to supply
     await ctx.db.patch(playerId, { money: player.money - prop.houseCost });
+    await ctx.db.patch(space._id, { hasHotel: true, houses: 0 });
     await ctx.db.patch(gameId, {
-      boardSpaces: newSpaces,
       houseSupply: game.houseSupply + 4,
       hotelSupply: game.hotelSupply - 1,
     });
@@ -86,26 +95,31 @@ export const sellHouse = mutation({
     const prop = PROPERTIES.find(p => p.position === position);
     if (!prop) throw new Error("Not a property");
 
-    const spaceIdx = game.boardSpaces.findIndex(s => s.position === position);
-    const space = game.boardSpaces[spaceIdx];
+    const space = await getSpaceByPosition(ctx, gameId, position);
     if (!space || space.ownerId !== playerId) throw new Error("Not your property");
     if ((space.houses ?? 0) <= 0 && !space.hasHotel) throw new Error("No buildings");
 
-    const newSpaces = [...game.boardSpaces];
-    let returnHouses = 0;
+    const sellPrice = prop.houseCost / 2;
+
     if (space.hasHotel) {
-      newSpaces[spaceIdx] = { ...space, hasHotel: false, houses: 4 };
-      returnHouses = 4;
-      await ctx.db.patch(gameId, { hotelSupply: game.hotelSupply + 1, houseSupply: game.houseSupply - 4 });
+      await ctx.db.patch(space._id, { hasHotel: false, houses: 4 });
+      await ctx.db.patch(gameId, {
+        hotelSupply: game.hotelSupply + 1,
+        houseSupply: game.houseSupply + 4,
+      });
     } else {
-      newSpaces[spaceIdx] = { ...space, houses: (space.houses ?? 1) - 1 };
-      returnHouses = -1;
+      const allSpaces = await getBoardSpaces(ctx, gameId);
+      const groupPositions = PROPERTIES.filter(p => p.color === prop.color).map(p => p.position);
+      const groupSpaces = allSpaces.filter(s => groupPositions.includes(s.position));
+      const maxHouses = Math.max(...groupSpaces.map(s => s.houses ?? 0));
+      if ((space.houses ?? 0) !== maxHouses) {
+        throw new Error("Must sell from most developed property first");
+      }
+      await ctx.db.patch(space._id, { houses: (space.houses ?? 1) - 1 });
       await ctx.db.patch(gameId, { houseSupply: game.houseSupply + 1 });
     }
 
-    const sellPrice = prop.houseCost / 2;
     await ctx.db.patch(playerId, { money: player.money + sellPrice });
-    await ctx.db.patch(gameId, { boardSpaces: newSpaces });
     return { success: true, sellPrice };
   },
 });
@@ -123,22 +137,18 @@ export const mortgageProperty = mutation({
     if (!player) throw new Error("Player not found");
 
     const prop = PROPERTIES.find(p => p.position === position);
-    const rail = (await import("../src/lib/constants")).RAILWAYS.find(r => r.position === position);
-    const util = (await import("../src/lib/constants")).UTILITIES.find(u => u.position === position);
+    const rail = RAILWAYS.find(r => r.position === position);
+    const util = UTILITIES.find(u => u.position === position);
     const mortgageValue = prop?.mortgageValue ?? rail?.mortgageValue ?? util?.mortgageValue;
     if (mortgageValue === undefined) throw new Error("Not mortgageable");
 
-    const spaceIdx = game.boardSpaces.findIndex(s => s.position === position);
-    const space = game.boardSpaces[spaceIdx];
+    const space = await getSpaceByPosition(ctx, gameId, position);
     if (!space || space.ownerId !== playerId) throw new Error("Not yours");
     if (space.isMortgaged) throw new Error("Already mortgaged");
     if ((space.houses ?? 0) > 0 || space.hasHotel) throw new Error("Remove buildings first");
 
-    const newSpaces = [...game.boardSpaces];
-    newSpaces[spaceIdx] = { ...space, isMortgaged: true };
-
+    await ctx.db.patch(space._id, { isMortgaged: true });
     await ctx.db.patch(playerId, { money: player.money + mortgageValue });
-    await ctx.db.patch(gameId, { boardSpaces: newSpaces });
     return { success: true, mortgageValue };
   },
 });
@@ -156,22 +166,18 @@ export const unmortgageProperty = mutation({
     if (!player) throw new Error("Player not found");
 
     const prop = PROPERTIES.find(p => p.position === position);
-    const rail = (await import("../src/lib/constants")).RAILWAYS.find(r => r.position === position);
-    const util = (await import("../src/lib/constants")).UTILITIES.find(u => u.position === position);
+    const rail = RAILWAYS.find(r => r.position === position);
+    const util = UTILITIES.find(u => u.position === position);
     const mortgageValue = prop?.mortgageValue ?? rail?.mortgageValue ?? util?.mortgageValue;
     if (mortgageValue === undefined) throw new Error("Not mortgageable");
     const unmortgageCost = Math.floor(mortgageValue * 1.1);
 
-    const spaceIdx = game.boardSpaces.findIndex(s => s.position === position);
-    const space = game.boardSpaces[spaceIdx];
+    const space = await getSpaceByPosition(ctx, gameId, position);
     if (!space || space.ownerId !== playerId || !space.isMortgaged) throw new Error("Cannot unmortgage");
     if (player.money < unmortgageCost) throw new Error("Not enough money");
 
-    const newSpaces = [...game.boardSpaces];
-    newSpaces[spaceIdx] = { ...space, isMortgaged: false };
-
+    await ctx.db.patch(space._id, { isMortgaged: false });
     await ctx.db.patch(playerId, { money: player.money - unmortgageCost });
-    await ctx.db.patch(gameId, { boardSpaces: newSpaces });
     return { success: true, cost: unmortgageCost };
   },
 });

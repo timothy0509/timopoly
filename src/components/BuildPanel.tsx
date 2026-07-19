@@ -2,7 +2,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatMoney } from "../lib/utils";
-import { PROPERTIES, COLOR_GROUPS, getColorForPosition, getSpaceColorClass } from "../lib/constants";
+import { PROPERTIES, RAILWAYS, UTILITIES, COLOR_GROUPS, getColorForPosition, getSpaceColorClass } from "../lib/constants";
 import { ownsColorGroup, canBuildHouse, canBuildHotel } from "../lib/gameLogic";
 import type { PlayerState, BoardSpaceState } from "../types";
 
@@ -22,8 +22,11 @@ export default function BuildPanel({ gameId, player, boardSpaces, onClose }: Pro
 
   const myProps = player.properties.map(pos => {
     const prop = PROPERTIES.find(p => p.position === pos);
+    const rail = RAILWAYS.find(r => r.position === pos);
+    const util = UTILITIES.find(u => u.position === pos);
     const space = boardSpaces.find(s => s.position === pos);
-    return { pos, prop, space };
+    const item = prop ?? rail ?? util;
+    return { pos, prop: item, space, isProperty: !!prop };
   }).filter(p => p.prop);
 
   const handleBuild = async (pos: number, space?: BoardSpaceState) => {
@@ -60,12 +63,13 @@ export default function BuildPanel({ gameId, player, boardSpaces, onClose }: Pro
             <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
           </div>
           <div className="space-y-2">
-            {myProps.map(({ pos, prop, space }) => {
+            {myProps.map(({ pos, prop, space, isProperty }) => {
               const color = getColorForPosition(pos);
               const colorClass = getSpaceColorClass(color);
-              const hasFullSet = prop ? ownsColorGroup(player, prop.color, boardSpaces) : false;
-              const canBuild = prop ? canBuildHouse(pos, boardSpaces, player) : false;
-              const canHotel = prop ? canBuildHotel(pos, boardSpaces, player) : false;
+              const hasFullSet = isProperty && prop ? ownsColorGroup(player, (prop as any).color, boardSpaces) : false;
+              const canBuild = isProperty ? canBuildHouse(pos, boardSpaces, player) : false;
+              const canHotel = isProperty ? canBuildHotel(pos, boardSpaces, player) : false;
+              const propDef = isProperty ? PROPERTIES.find(p => p.position === pos) : undefined;
               return (
                 <div key={pos} className={`flex items-center gap-2 bg-gray-800/60 rounded px-3 py-2 ${space?.isMortgaged ? "opacity-60" : ""}`}>
                   <div className={`w-3 h-3 rounded-sm ${colorClass} shrink-0`} />
@@ -78,13 +82,13 @@ export default function BuildPanel({ gameId, player, boardSpaces, onClose }: Pro
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {(canBuild || canHotel) && (
+                    {(canBuild || canHotel) && isProperty && (
                       <button onClick={() => handleBuild(pos, space)} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-[10px] font-semibold"
-                        title={canHotel ? `Build Hotel (${formatMoney(prop?.houseCost ?? 0)})` : `Build House (${formatMoney(prop?.houseCost ?? 0)})`}>
+                        title={canHotel ? `Build Hotel (${formatMoney(propDef?.houseCost ?? 0)})` : `Build House (${formatMoney(propDef?.houseCost ?? 0)})`}>
                         Build
                       </button>
                     )}
-                    {((space?.houses ?? 0) > 0 || space?.hasHotel) && (
+                    {((space?.houses ?? 0) > 0 || space?.hasHotel) && isProperty && (
                       <button onClick={() => handleSell(pos)} className="px-2 py-1 bg-yellow-700 hover:bg-yellow-600 rounded text-[10px] font-semibold">Sell</button>
                     )}
                     {!space?.isMortgaged && (space?.houses ?? 0) === 0 && !space?.hasHotel && (

@@ -7,7 +7,6 @@ A Timo-themed Monopoly clone set in the world of **Timotopia**. Play online mult
 - **Frontend:** React 19, TypeScript, Vite
 - **Styling:** Tailwind CSS v4
 - **Backend:** Convex (real-time database + server functions)
-- **Icons:** Lucide React
 
 ## Getting Started
 
@@ -16,12 +15,17 @@ A Timo-themed Monopoly clone set in the world of **Timotopia**. Play online mult
    npm install
    ```
 
-2. Start the local dev servers (Convex + Vite):
+2. Copy the environment file and fill in your Convex URL:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+3. Start the local dev servers (Convex + Vite):
    ```bash
    npm run dev
    ```
 
-   Vite serves the frontend on its default port and connects to the Convex dev server at `http://localhost:3210` (configured in `.env.local`).
+   This runs `convex dev` and `vite` concurrently (via `concurrently`). Vite serves the frontend on its default port and connects to the Convex deployment specified in `.env.local`.
 
 3. Open the app in your browser and create or join a game with a lobby code.
 
@@ -31,9 +35,9 @@ The frontend expects a Convex URL at build time.
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `VITE_CONVEX_URL` | URL of the Convex deployment the app connects to | `http://localhost:3210` (local dev) |
+| `VITE_CONVEX_URL` | URL of the Convex deployment the app connects to | `https://your-deployment.convex.cloud` |
 
-Local development is already configured via `.env.local` (`VITE_CONVEX_URL=http://localhost:3210`). For a production deployment, set this to your deployed Convex URL.
+Copy `.env.example` to `.env.local` and fill in your Convex URL (from `npx convex dev` or the Convex dashboard). For production, set this to your deployed Convex URL.
 
 ## Deployment
 

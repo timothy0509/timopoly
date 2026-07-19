@@ -37,7 +37,7 @@ export function ownsColorGroup(
 export function countRailways(player: PlayerState, allSpaces: BoardSpaceState[]): number {
   return RAILWAY_POSITIONS.filter(pos => {
     const s = allSpaces.find(sp => sp.position === pos);
-    return s?.ownerId === player._id;
+    return s?.ownerId === player._id && !s.isMortgaged;
   }).length;
 }
 
@@ -51,7 +51,7 @@ export function countUtilities(player: PlayerState, allSpaces: BoardSpaceState[]
   const utilPositions = UTILITIES.map(u => u.position);
   return utilPositions.filter(pos => {
     const s = allSpaces.find(sp => sp.position === pos);
-    return s?.ownerId === player._id;
+    return s?.ownerId === player._id && !s.isMortgaged;
   }).length;
 }
 

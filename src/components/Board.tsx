@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { BOARD_SPACES, PROPERTIES, RAILWAYS, UTILITIES, RAILWAY_POSITIONS, CHANCE_CARDS, TREASURY_CARDS } from "../lib/constants";
+import { BOARD_SPACES, PROPERTIES, RAILWAYS, UTILITIES, RAILWAY_POSITIONS } from "../lib/constants";
 import { getTokenEmoji, formatMoney } from "../lib/utils";
 import BoardSpace from "./BoardSpace";
 import PlayerPanel from "./PlayerPanel";
@@ -26,6 +26,11 @@ export default function GameBoard({ gameId, playerId }: Props) {
   const game = useQuery(api.games.getById, { id: gameId });
   const players = useQuery(api.players.getByGame, { gameId });
 
+  const sortedPlayers = useMemo(() => {
+    if (!players) return undefined;
+    return [...players].sort((a, b) => a.order - b.order);
+  }, [players]);
+
   const rollDice = useMutation(api.turns.rollDice);
   const resolveSpace = useMutation(api.turns.resolveSpace);
   const buyProperty = useMutation(api.turns.buyProperty);
@@ -41,16 +46,43 @@ export default function GameBoard({ gameId, playerId }: Props) {
 
   const [isRolling, setIsRolling] = useState(false);
   const [showProperty, setShowProperty] = useState<number | null>(null);
-  const [showCard, setShowCard] = useState<{ card: CardDef; result?: any } | null>(null);
+  const [showCard, setShowCard] = useState<{ card: CardDef; result?: Record<string, unknown> } | null>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [showBuild, setShowBuild] = useState(false);
   const [showRailway, setShowRailway] = useState(false);
   const [showJail, setShowJail] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
 
+  const handleBotTurn = useCallback(async (botId: string) => {
+    try {
+      await executeBotTurn({ gameId, playerId: botId as Id<"players"> });
+      const result = await rollDice({ gameId, playerId: botId as Id<"players"> });
+      if (!result.wentToJail) {
+        const resolved = await resolveSpace({ gameId, playerId: botId as Id<"players"> });
+        if (resolved.action === "can_buy") {
+          const bot = sortedPlayers?.find(p => p._id === botId);
+          if (bot && (bot.botDifficulty === "medium" || bot.botDifficulty === "hard") && bot.money >= (resolved.price ?? 0)) {
+            await buyProperty({ gameId, playerId: botId as Id<"players"> });
+          }
+        }
+        if (resolved.action === "draw_card") {
+          await drawCard({ gameId, playerId: botId as Id<"players">, deck: resolved.deck });
+        }
+      }
+      await endTurn({ gameId, playerId: botId as Id<"players"> });
+    } catch (e) {
+      console.error("Bot turn failed:", e);
+    }
+  }, [gameId, sortedPlayers, executeBotTurn, rollDice, resolveSpace, buyProperty, drawCard, endTurn]);
+
+  const handleBotJail = useCallback(async (botId: string) => {
+    await tryJailDoubles({ gameId, playerId: botId as Id<"players"> });
+    await endTurn({ gameId, playerId: botId as Id<"players"> });
+  }, [gameId, tryJailDoubles, endTurn]);
+
   useEffect(() => {
     if (game?.turnPhase === "pre_roll" && game?.status === "playing") {
-      const cp = players?.[game.currentPlayerIndex];
+      const cp = sortedPlayers?.[game.currentPlayerIndex];
       if (cp?.isInJail) {
         if (cp.isBot) {
           handleBotJail(cp._id);
@@ -61,38 +93,12 @@ export default function GameBoard({ gameId, playerId }: Props) {
         handleBotTurn(cp._id);
       }
     }
-  }, [game?.turnPhase, game?.currentPlayerIndex, game?.status]);
+  }, [game?.turnPhase, game?.currentPlayerIndex, game?.status, handleBotTurn, handleBotJail, sortedPlayers, playerId]);
 
-  const me = players?.find(p => p._id === playerId);
-  const currentPlayer = players?.[game?.currentPlayerIndex ?? 0];
+  const me = sortedPlayers?.find(p => p._id === playerId);
+  const currentPlayer = sortedPlayers?.[game?.currentPlayerIndex ?? 0];
   const isMyTurn = currentPlayer?._id === playerId;
   const dice = game?.lastDice;
-
-  const handleBotTurn = async (botId: string) => {
-    try {
-      await executeBotTurn({ gameId, playerId: botId as Id<"players"> });
-      const result = await rollDice({ gameId, playerId: botId as Id<"players"> });
-      if (!result.wentToJail) {
-        const resolved = await resolveSpace({ gameId, playerId: botId as Id<"players"> });
-        if (resolved.action === "can_buy") {
-          // Bots buy if they can afford it and have difficulty >= medium
-          const bot = players?.find(p => p._id === botId);
-          if (bot && (bot.botDifficulty === "medium" || bot.botDifficulty === "hard") && bot.money >= (resolved.price ?? 0)) {
-            await buyProperty({ gameId, playerId: botId as Id<"players"> });
-          }
-        }
-        if (resolved.action === "draw_card") {
-          await drawCard({ gameId, playerId: botId as Id<"players">, deck: resolved.deck });
-        }
-      }
-      await endTurn({ gameId, playerId: botId as Id<"players"> });
-    } catch {}
-  };
-
-  const handleBotJail = async (botId: string) => {
-    await tryJailDoubles({ gameId, playerId: botId as Id<"players"> });
-    await endTurn({ gameId, playerId: botId as Id<"players"> });
-  };
 
   const handleRoll = async () => {
     if (!isMyTurn || !me) return;
@@ -128,9 +134,8 @@ export default function GameBoard({ gameId, playerId }: Props) {
   };
 
   const handleDeclineBuy = async () => {
-    // Start an auction instead of ending the turn
-    if (lastResult?.position !== undefined) {
-      await startAuction({ gameId, position: me!.position });
+    if (lastResult?.newPosition !== undefined || lastResult?.action === "can_buy") {
+      await startAuction({ gameId, playerId, position: me!.position });
       setLastResult(null);
     } else {
       await endTurn({ gameId, playerId });
@@ -147,7 +152,6 @@ export default function GameBoard({ gameId, playerId }: Props) {
   const handleAuctionPass = async () => {
     try {
       const result = await passAuction({ gameId, playerId });
-      // If auction ended with no bids, end the turn
       if (result.ended && !result.winnerId) {
         await endTurn({ gameId, playerId });
       }
@@ -158,7 +162,7 @@ export default function GameBoard({ gameId, playerId }: Props) {
     if (!lastResult?.deck) return;
     try {
       const result = await drawCard({ gameId, playerId, deck: lastResult.deck });
-      setShowCard({ card: result.card, result });
+      setShowCard({ card: result.card as CardDef, result });
       setLastResult(null);
     } catch (e: any) { alert(e.message); }
   };
@@ -177,10 +181,17 @@ export default function GameBoard({ gameId, playerId }: Props) {
     try { await useJailCard({ gameId, playerId }); setShowJail(false); } catch (e: any) { alert(e.message); }
   };
   const handleTryDoubles = async () => {
-    try { await tryJailDoubles({ gameId, playerId }); setShowJail(false); } catch (e: any) { alert(e.message); }
+    try {
+      const result = await tryJailDoubles({ gameId, playerId });
+      setShowJail(false);
+      if (result.escaped) {
+        const resolved = await resolveSpace({ gameId, playerId });
+        setLastResult({ ...result, ...resolved });
+      }
+    } catch (e: any) { alert(e.message); }
   };
 
-  if (!game || !players || !me) {
+  if (!game || !sortedPlayers || !me) {
     return <div className="flex items-center justify-center h-screen bg-timo-dark text-white">Loading...</div>;
   }
 
@@ -239,7 +250,7 @@ export default function GameBoard({ gameId, playerId }: Props) {
                   </div>;
                 }
                 const space = game.boardSpaces.find(s => s.position === pos);
-                const playersHere = players.filter(p => p.position === pos && !p.isBankrupt);
+                const playersHere = sortedPlayers.filter(p => p.position === pos && !p.isBankrupt);
                 return (
                   <div key={`${r}-${c}`} className="cursor-pointer" onClick={() => setShowProperty(pos)}>
                     <BoardSpace position={pos} space={space} playersHere={playersHere}
@@ -314,12 +325,12 @@ export default function GameBoard({ gameId, playerId }: Props) {
             </div>
 
             {/* Player panel */}
-            <PlayerPanel players={players} currentPlayerId={currentPlayer?._id} myPlayerId={playerId} />
+            <PlayerPanel players={sortedPlayers} currentPlayerId={currentPlayer?._id} myPlayerId={playerId} />
           </div>
 
           {/* Chat */}
           <div className="h-40 border-t border-gray-800 p-2 shrink-0">
-            <ChatPanel gameId={gameId} playerId={playerId} players={players} chatLog={game.chatLog} />
+            <ChatPanel gameId={gameId} playerId={playerId} players={sortedPlayers} chatLog={game.chatLog} />
           </div>
         </aside>
       </div>
@@ -354,7 +365,7 @@ export default function GameBoard({ gameId, playerId }: Props) {
       )}
       {showCard && <CardModal card={showCard.card} result={showCard.result} onClose={() => setShowCard(null)} />}
       {showTrade && me && (
-        <TradeModal gameId={gameId} me={me} players={players} boardSpaces={game.boardSpaces} onClose={() => setShowTrade(false)} />
+        <TradeModal gameId={gameId} me={me} players={sortedPlayers} boardSpaces={game.boardSpaces} onClose={() => setShowTrade(false)} />
       )}
       {showBuild && me && (
         <BuildPanel gameId={gameId} player={me} boardSpaces={game.boardSpaces} onClose={() => setShowBuild(false)} />
@@ -368,7 +379,7 @@ export default function GameBoard({ gameId, playerId }: Props) {
       {game.currentAuction && (
         <AuctionModal
           position={game.currentAuction.propertyPosition}
-          players={players}
+          players={sortedPlayers}
           currentPlayerId={playerId}
           onBid={handleAuctionBid}
           onPass={handleAuctionPass}

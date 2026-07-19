@@ -4,7 +4,7 @@ React + TypeScript + Vite + Tailwind CSS v4 + Convex.
 
 ## Development
 
-- `npm run dev` — starts both the Convex local dev server (`convex dev`) and the Vite dev server in parallel. Requires a running Convex dev deployment / `VITE_CONVEX_URL`.
+- `npm run dev` — starts both the Convex local dev server (`convex dev`) and the Vite dev server in parallel via `concurrently`. Requires a running Convex dev deployment / `VITE_CONVEX_URL`.
 - `npm run build` — runs `tsc -b` then `vite build`.
 - `npm run preview` — previews the Vite production build.
 - `npm run convex` — alias for `convex dev`.
@@ -28,7 +28,7 @@ React + TypeScript + Vite + Tailwind CSS v4 + Convex.
 
 - Convex functions live in `convex/*.ts` (games, players, turns, properties, cards, trades, railway, bots).
 - Schema is in `convex/schema.ts`.
-- Client connects to `import.meta.env.VITE_CONVEX_URL`; local default is set in `.env.local` (`http://localhost:3210`).
+- Client connects to `import.meta.env.VITE_CONVEX_URL`; see `.env.example` for the required format.
 - `convex/_generated/` contains generated API types and helpers — import `api` and `dataModel` from there.
 
 ## Frontend structure

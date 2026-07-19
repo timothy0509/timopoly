@@ -22,17 +22,18 @@ export const drawCard = mutation({
     const card = isChance ? CHANCE_CARDS[cardIndex] : TREASURY_CARDS[cardIndex];
     if (!card) throw new Error("Card not found");
 
-    // Advance index
     if (isChance) {
       await ctx.db.patch(gameId, { chanceIndex: game.chanceIndex + 1 });
     } else {
       await ctx.db.patch(gameId, { treasuryIndex: game.treasuryIndex + 1 });
     }
 
-    let result: any = { card, action: card.effectType };
+    let result: Record<string, unknown> = { card, action: card.effectType };
+    let isMoveEffect = false;
 
     switch (card.effectType) {
       case "move_to": {
+        isMoveEffect = true;
         const target = card.position!;
         const steps = target > player.position ? target - player.position : 40 - player.position + target;
         const passedGo = target < player.position || (player.position + steps >= 40);
@@ -43,6 +44,7 @@ export const drawCard = mutation({
         break;
       }
       case "nearest_railway": {
+        isMoveEffect = true;
         const target = nearestRailwayPosition(player.position);
         const passedGo = target < player.position;
         let newMoney = player.money + (passedGo ? GO_SALARY : 0);
@@ -52,6 +54,7 @@ export const drawCard = mutation({
         break;
       }
       case "nearest_utility": {
+        isMoveEffect = true;
         const target = nearestUtilityPosition(player.position);
         const passedGo = target < player.position;
         let newMoney = player.money + (passedGo ? GO_SALARY : 0);
@@ -61,12 +64,14 @@ export const drawCard = mutation({
         break;
       }
       case "go_back": {
+        isMoveEffect = true;
         const newPos = (player.position - (card.value ?? 3) + 40) % 40;
         await ctx.db.patch(playerId, { position: newPos });
         result.newPosition = newPos;
         break;
       }
       case "go_to_jail": {
+        isMoveEffect = true;
         await ctx.db.patch(playerId, { position: 10, isInJail: true, jailTurns: 0 });
         result.newPosition = 10;
         break;
@@ -86,7 +91,8 @@ export const drawCard = mutation({
       }
       case "repairs": {
         const perHotel = isChance ? 100 : 115;
-        const { houses, hotels } = countBuildings(player, game.boardSpaces);
+        const boardSpaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+        const { houses, hotels } = countBuildings(player, boardSpaces);
         const cost = (houses * (card.value ?? 0)) + (hotels * perHotel);
         const newMoney = Math.max(0, player.money - cost);
         await ctx.db.patch(playerId, { money: newMoney });
@@ -98,10 +104,11 @@ export const drawCard = mutation({
         const others = allPlayers.filter(p => p._id !== playerId && !p.isBankrupt);
         const amount = card.value ?? 0;
         let totalPay = amount * others.length;
-        const newMoney = Math.max(0, player.money - totalPay);
-        await ctx.db.patch(playerId, { money: newMoney });
+        const actualTotalPay = Math.min(totalPay, player.money);
+        const actualPerPlayer = Math.floor(actualTotalPay / others.length);
+        await ctx.db.patch(playerId, { money: player.money - actualTotalPay });
         for (const other of others) {
-          await ctx.db.patch(other._id, { money: other.money + amount });
+          await ctx.db.patch(other._id, { money: other.money + actualPerPlayer });
         }
         break;
       }
@@ -120,7 +127,11 @@ export const drawCard = mutation({
       }
     }
 
-    await ctx.db.patch(gameId, { turnPhase: "end_turn" });
+    if (isMoveEffect) {
+      await ctx.db.patch(gameId, { turnPhase: "resolving" });
+    } else {
+      await ctx.db.patch(gameId, { turnPhase: "end_turn" });
+    }
     return result;
   },
 });

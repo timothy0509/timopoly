@@ -1,10 +1,13 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { STARTING_MONEY } from "../src/lib/constants";
 
 export const getByGame = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
-    return await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    const players = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    players.sort((a, b) => a.order - b.order);
+    return players;
   },
 });
 
@@ -27,6 +30,7 @@ export const joinGame = mutation({
     if (!game || game.status !== "lobby") throw new Error("Game not joinable");
 
     const existing = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    if (existing.length >= 8) throw new Error("Game is full");
     const takenTokens = new Set(existing.map(p => p.token));
     if (takenTokens.has(token)) throw new Error("Token taken");
 
@@ -38,7 +42,7 @@ export const joinGame = mutation({
       isBot: false,
       ready: true,
       order: existing.length,
-      money: 1500,
+      money: STARTING_MONEY,
       position: 0,
       properties: [],
       getOutOfJailCards: 0,
@@ -63,6 +67,9 @@ export const addBot = mutation({
     if (!game || game.status !== "lobby") throw new Error("Game not in lobby");
 
     const existing = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    if (existing.length >= 8) throw new Error("Game is full");
+    const takenTokens = new Set(existing.map(p => p.token));
+    if (takenTokens.has(token)) throw new Error("Token taken");
 
     const playerId = await ctx.db.insert("players", {
       gameId,
@@ -72,7 +79,7 @@ export const addBot = mutation({
       botDifficulty: difficulty,
       ready: true,
       order: existing.length,
-      money: 1500,
+      money: STARTING_MONEY,
       position: 0,
       properties: [],
       getOutOfJailCards: 0,
@@ -110,7 +117,7 @@ export const joinByCode = mutation({
       isBot: false,
       ready: true,
       order: existing.length,
-      money: 1500,
+      money: STARTING_MONEY,
       position: 0,
       properties: [],
       getOutOfJailCards: 0,

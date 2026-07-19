@@ -2,7 +2,7 @@ import type { CardDef } from "../types";
 
 interface Props {
   card: CardDef;
-  result?: any;
+  result?: Record<string, unknown>;
   onClose: () => void;
 }
 
@@ -20,10 +20,10 @@ export default function CardModal({ card, result, onClose }: Props) {
         <div className="p-5">
           <p className="text-lg font-medium text-center mb-4">{card.text}</p>
           {result?.cost !== undefined && (
-            <p className="text-center text-red-300 font-mono text-lg mb-2">-{result.cost}</p>
+            <p className="text-center text-red-300 font-mono text-lg mb-2">-{String(result.cost)}</p>
           )}
           {result?.newPosition !== undefined && (
-            <p className="text-center text-gray-400 text-sm">Moved to space {result.newPosition}</p>
+            <p className="text-center text-gray-400 text-sm">Moved to space {String(result.newPosition)}</p>
           )}
           <button onClick={onClose}
             className="w-full mt-4 py-2 bg-white/20 hover:bg-white/30 rounded-md text-sm font-medium transition-colors">

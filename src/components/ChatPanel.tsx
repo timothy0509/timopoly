@@ -35,7 +35,7 @@ export default function ChatPanel({ gameId, playerId, players, chatLog }: Props)
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-1 text-xs mb-2">
         {chatLog.slice(-20).map((entry, i) => (
-          <div key={i}>
+          <div key={`${entry.playerId}-${entry.timestamp}-${i}`}>
             <span className="font-semibold text-gray-400">{getName(entry.playerId)}: </span>
             <span className="text-gray-300">{entry.message}</span>
           </div>

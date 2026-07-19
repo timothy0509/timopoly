@@ -1,20 +1,33 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { BOARD_SPACES, STARTING_MONEY, MAX_HOUSES, MAX_HOTELS, CHANCE_CARDS, TREASURY_CARDS } from "../src/lib/constants";
+import { BOARD_SPACES, STARTING_MONEY, MAX_HOUSES, MAX_HOTELS } from "../src/lib/constants";
 import { shuffle } from "../src/lib/utils";
 
 export const getByCode = query({
   args: { code: v.string() },
   handler: async (ctx, { code }) => {
     const game = await ctx.db.query("games").withIndex("by_code", q => q.eq("code", code)).unique();
-    return game;
+    if (!game) return null;
+    const boardSpaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", game._id)).collect();
+    boardSpaces.sort((a, b) => a.position - b.position);
+    const chatMessages = await ctx.db.query("chatMessages").withIndex("by_game", q => q.eq("gameId", game._id)).collect();
+    chatMessages.sort((a, b) => a.timestamp - b.timestamp);
+    const { chanceDeck, treasuryDeck, chanceIndex, treasuryIndex, ...gameData } = game;
+    return { ...gameData, boardSpaces, chatLog: chatMessages };
   },
 });
 
 export const getById = query({
   args: { id: v.id("games") },
   handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+    const game = await ctx.db.get(id);
+    if (!game) return null;
+    const boardSpaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", game._id)).collect();
+    boardSpaces.sort((a, b) => a.position - b.position);
+    const chatMessages = await ctx.db.query("chatMessages").withIndex("by_game", q => q.eq("gameId", game._id)).collect();
+    chatMessages.sort((a, b) => a.timestamp - b.timestamp);
+    const { chanceDeck, treasuryDeck, chanceIndex, treasuryIndex, ...gameData } = game;
+    return { ...gameData, boardSpaces, chatLog: chatMessages };
   },
 });
 
@@ -26,18 +39,11 @@ export const create = mutation({
     hostUserId: v.optional(v.string()),
   },
   handler: async (ctx, { code, hostName, hostToken, hostUserId }) => {
-    const boardSpaces = BOARD_SPACES.map(s => ({
-      position: s.position,
-      type: s.type,
-      name: s.name,
-    }));
-
     const gameId = await ctx.db.insert("games", {
       code,
       status: "lobby",
       currentPlayerIndex: 0,
       turnPhase: "pre_roll",
-      boardSpaces,
       chanceDeck: shuffle(Array.from({ length: 16 }, (_, i) => i)),
       treasuryDeck: shuffle(Array.from({ length: 16 }, (_, i) => i)),
       chanceIndex: 0,
@@ -45,9 +51,17 @@ export const create = mutation({
       houseSupply: MAX_HOUSES,
       hotelSupply: MAX_HOTELS,
       doublesCount: 0,
-      chatLog: [],
       createdAt: Date.now(),
     });
+
+    for (const s of BOARD_SPACES) {
+      await ctx.db.insert("boardSpaces", {
+        gameId,
+        position: s.position,
+        type: s.type,
+        name: s.name,
+      });
+    }
 
     const playerId = await ctx.db.insert("players", {
       gameId,
@@ -73,15 +87,19 @@ export const create = mutation({
 });
 
 export const startGame = mutation({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }) => {
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, { gameId, playerId }) => {
     const game = await ctx.db.get(gameId);
     if (!game || game.status !== "lobby") throw new Error("Game not in lobby");
+    if (game.hostId !== playerId) throw new Error("Only the host can start");
 
     const players = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
     if (players.length < 2) throw new Error("Need at least 2 players");
+    if (players.length > 8) throw new Error("Too many players");
 
-    // Randomize turn order
     const indices = shuffle(players.map((_, i) => i));
     for (let i = 0; i < players.length; i++) {
       await ctx.db.patch(players[indices[i]]._id, { order: i });

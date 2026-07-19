@@ -17,12 +17,6 @@ export default function PlayerPanel({ players, currentPlayerId, myPlayerId }: Pr
       {sorted.map(p => {
         const isCurrent = p._id === currentPlayerId;
         const isMe = p._id === myPlayerId;
-        const propNames = p.properties.map(pos => {
-          const prop = PROPERTIES.find(pr => pr.position === pos);
-          const rail = RAILWAYS.find(r => r.position === pos);
-          const util = UTILITIES.find(u => u.position === pos);
-          return prop?.name ?? rail?.name ?? util?.name ?? `#${pos}`;
-        });
 
         return (
           <div key={p._id}
@@ -39,11 +33,15 @@ export default function PlayerPanel({ players, currentPlayerId, myPlayerId }: Pr
               {p.isInJail && <span className="text-red-400 text-[10px] bg-red-400/10 px-1 rounded">IN JAIL</span>}
               {p.isBankrupt && <span className="text-gray-500 text-[10px]">BANKRUPT</span>}
             </div>
-            {propNames.length > 0 && (
+            {p.properties.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
-                {propNames.map((name, i) => (
-                  <span key={i} className="text-[9px] bg-gray-700 text-gray-300 px-1 rounded">{name}</span>
-                ))}
+                {p.properties.map(pos => {
+                  const prop = PROPERTIES.find(pr => pr.position === pos);
+                  const rail = RAILWAYS.find(r => r.position === pos);
+                  const util = UTILITIES.find(u => u.position === pos);
+                  const name = prop?.name ?? rail?.name ?? util?.name ?? `#${pos}`;
+                  return <span key={pos} className="text-[9px] bg-gray-700 text-gray-300 px-1 rounded">{name}</span>;
+                })}
               </div>
             )}
           </div>

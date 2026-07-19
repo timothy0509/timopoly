@@ -1,6 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { RAILWAY_POSITIONS, GO_SALARY } from "../src/lib/constants";
+import { RAILWAY_POSITIONS } from "../src/lib/constants";
 
 export const railwayTravel = mutation({
   args: {
@@ -11,28 +11,29 @@ export const railwayTravel = mutation({
   handler: async (ctx, { gameId, playerId, destination }) => {
     const game = await ctx.db.get(gameId);
     if (!game) throw new Error("Game not found");
-    const player = await ctx.db.get(playerId);
+    if (game.turnPhase !== "resolving" && game.turnPhase !== "post_roll") throw new Error("Wrong phase");
+    const players = await ctx.db.query("players").withIndex("by_game", q => q.eq("gameId", gameId)).collect();
+    players.sort((a, b) => a.order - b.order);
+    const player = players.find(p => p._id === playerId);
     if (!player) throw new Error("Player not found");
+    const currentPlayer = players[game.currentPlayerIndex];
+    if (!currentPlayer || currentPlayer._id !== playerId) throw new Error("Not your turn");
     if (player.hasUsedRailwayTravel) throw new Error("Already used this turn");
 
-    // Verify current position is a railway
     if (!RAILWAY_POSITIONS.includes(player.position)) throw new Error("Not on a railway");
-    // Verify destination is a railway
     if (!RAILWAY_POSITIONS.includes(destination)) throw new Error("Not a railway destination");
-    // Verify player owns the current railway
-    const currentSpace = game.boardSpaces.find(s => s.position === player.position);
+
+    const currentSpace = await ctx.db.query("boardSpaces").withIndex("by_game_and_position", q => q.eq("gameId", gameId).eq("position", player.position)).unique();
     if (!currentSpace || currentSpace.ownerId !== playerId) throw new Error("Don't own current railway");
-    // Verify player owns the destination railway
-    const destSpace = game.boardSpaces.find(s => s.position === destination);
+
+    const destSpace = await ctx.db.query("boardSpaces").withIndex("by_game_and_position", q => q.eq("gameId", gameId).eq("position", destination)).unique();
     if (!destSpace || destSpace.ownerId !== playerId) throw new Error("Don't own destination");
 
-    // Move player (no GO salary for railway travel)
     await ctx.db.patch(playerId, {
       position: destination,
       hasUsedRailwayTravel: true,
     });
 
-    // Set phase to resolving so the client can trigger resolveSpace on the destination
     await ctx.db.patch(gameId, { turnPhase: "resolving" });
 
     return { newPosition: destination };

@@ -57,8 +57,8 @@ export default function GameLobby({ onJoin }: Props) {
   };
 
   const handleStart = async () => {
-    if (!gameId) return;
-    try { await startMutation({ gameId }); } catch (e: any) { setError(e.message); }
+    if (!gameId || !playerId) return;
+    try { await startMutation({ gameId, playerId }); } catch (e: any) { setError(e.message); }
   };
 
   const handleAddBot = async (difficulty: "easy" | "medium" | "hard") => {
@@ -87,7 +87,7 @@ export default function GameLobby({ onJoin }: Props) {
           </div>
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2 text-gray-300">Choose Token</label>
-            <TokenSelect selected={token} onSelect={setToken} taken={[]} />
+            <TokenSelect selected={token} onSelect={setToken} taken={players?.map(p => p.token) ?? []} />
           </div>
           {error && <div className="text-red-400 text-sm mb-4 bg-red-400/10 px-3 py-2 rounded">{error}</div>}
           <div className="space-y-3">
@@ -142,8 +142,8 @@ export default function GameLobby({ onJoin }: Props) {
           <div className="mb-6">
             <div className="text-sm text-gray-400 mb-2">Add Bot</div>
             <div className="flex gap-2">
-              {[["easy","bg-green-700 hover:bg-green-600"],["medium","bg-yellow-700 hover:bg-yellow-600"],["hard","bg-red-700 hover:bg-red-600"]].map(([d,c]) => (
-                <button key={d} onClick={() => handleAddBot(d as any)} className={`flex-1 py-1.5 ${c} rounded-md text-sm font-medium transition-colors capitalize`}>{d}</button>
+              {([["easy","bg-green-700 hover:bg-green-600"],["medium","bg-yellow-700 hover:bg-yellow-600"],["hard","bg-red-700 hover:bg-red-600"]] as const).map(([d,c]) => (
+                <button key={d} onClick={() => handleAddBot(d)} className={`flex-1 py-1.5 ${c} rounded-md text-sm font-medium transition-colors capitalize`}>{d}</button>
               ))}
             </div>
           </div>

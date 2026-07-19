@@ -74,6 +74,7 @@ export interface BoardSpaceDef {
 export interface PlayerState {
   _id: string;
   gameId: string;
+  userId?: string;
   name: string;
   token: string;
   isBot: boolean;
@@ -108,10 +109,10 @@ export interface GameState {
   currentPlayerIndex: number;
   turnPhase: TurnPhase;
   boardSpaces: BoardSpaceState[];
-  chanceDeck: number[];
-  treasuryDeck: number[];
-  chanceIndex: number;
-  treasuryIndex: number;
+  chanceDeck?: number[];
+  treasuryDeck?: number[];
+  chanceIndex?: number;
+  treasuryIndex?: number;
   houseSupply: number;
   hotelSupply: number;
   lastDice?: { die1: number; die2: number; doubles: boolean };

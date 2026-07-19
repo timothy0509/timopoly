@@ -16,15 +16,6 @@ export default defineSchema({
       v.literal("building"),
       v.literal("end_turn")
     ),
-    boardSpaces: v.array(v.object({
-      position: v.number(),
-      type: v.string(),
-      name: v.string(),
-      ownerId: v.optional(v.id("players")),
-      houses: v.optional(v.number()),
-      hasHotel: v.optional(v.boolean()),
-      isMortgaged: v.optional(v.boolean()),
-    })),
     chanceDeck: v.array(v.number()),
     treasuryDeck: v.array(v.number()),
     chanceIndex: v.number(),
@@ -44,13 +35,27 @@ export default defineSchema({
       bidderIds: v.array(v.id("players")),
       expiresAt: v.number(),
     })),
-    chatLog: v.array(v.object({
-      playerId: v.id("players"),
-      message: v.string(),
-      timestamp: v.number(),
-    })),
     createdAt: v.number(),
   }).index("by_code", ["code"]),
+
+  boardSpaces: defineTable({
+    gameId: v.id("games"),
+    position: v.number(),
+    type: v.string(),
+    name: v.string(),
+    ownerId: v.optional(v.id("players")),
+    houses: v.optional(v.number()),
+    hasHotel: v.optional(v.boolean()),
+    isMortgaged: v.optional(v.boolean()),
+  }).index("by_game", ["gameId"])
+    .index("by_game_and_position", ["gameId", "position"]),
+
+  chatMessages: defineTable({
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+    message: v.string(),
+    timestamp: v.number(),
+  }).index("by_game", ["gameId"]),
 
   players: defineTable({
     gameId: v.id("games"),
@@ -74,7 +79,8 @@ export default defineSchema({
     isBankrupt: v.boolean(),
     hasUsedRailwayTravel: v.boolean(),
   }).index("by_game", ["gameId"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_game_and_order", ["gameId", "order"]),
 
   trades: defineTable({
     gameId: v.id("games"),
@@ -87,5 +93,6 @@ export default defineSchema({
     requestCash: v.number(),
     requestCards: v.number(),
     status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
-  }).index("by_game", ["gameId"]),
+  }).index("by_game", ["gameId"])
+    .index("by_game_and_status", ["gameId", "status"]),
 });

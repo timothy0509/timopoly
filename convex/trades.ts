@@ -21,6 +21,26 @@ export const proposeTrade = mutation({
     requestCards: v.number(),
   },
   handler: async (ctx, args) => {
+    if (args.offerCash < 0 || args.requestCash < 0) throw new Error("Cash cannot be negative");
+    if (args.offerCards < 0 || args.requestCards < 0) throw new Error("Cards cannot be negative");
+
+    const proposer = await ctx.db.get(args.proposerId);
+    const responder = await ctx.db.get(args.responderId);
+    if (!proposer || !responder) throw new Error("Player not found");
+
+    const boardSpaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", args.gameId)).collect();
+
+    for (const pos of args.offerProperties) {
+      if (!proposer.properties.includes(pos)) throw new Error("Proposer doesn't own offered property");
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space?.isMortgaged) throw new Error("Cannot trade mortgaged property");
+    }
+    for (const pos of args.requestProperties) {
+      if (!responder.properties.includes(pos)) throw new Error("Responder doesn't own requested property");
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space?.isMortgaged) throw new Error("Cannot trade mortgaged property");
+    }
+
     const tradeId = await ctx.db.insert("trades", {
       gameId: args.gameId,
       proposerId: args.proposerId,
@@ -51,21 +71,30 @@ export const acceptTrade = mutation({
     const game = await ctx.db.get(trade.gameId);
     if (!game) throw new Error("Game not found");
 
-    // Verify both players have what they're offering
     if (proposer.money < trade.offerCash) throw new Error("Proposer lacks cash");
     if (responder.money < trade.requestCash) throw new Error("Responder lacks cash");
 
-    // Transfer properties
+    const boardSpaces = await ctx.db.query("boardSpaces").withIndex("by_game", q => q.eq("gameId", trade.gameId)).collect();
+
+    for (const pos of trade.offerProperties) {
+      if (!proposer.properties.includes(pos)) throw new Error("Proposer no longer owns offered property");
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space?.isMortgaged) throw new Error("Cannot trade mortgaged property");
+    }
+    for (const pos of trade.requestProperties) {
+      if (!responder.properties.includes(pos)) throw new Error("Responder no longer owns requested property");
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space?.isMortgaged) throw new Error("Cannot trade mortgaged property");
+    }
+
     const newProposerProps = proposer.properties.filter(p => !trade.offerProperties.includes(p));
     const newResponderProps = responder.properties.filter(p => !trade.requestProperties.includes(p));
     newProposerProps.push(...trade.requestProperties);
     newResponderProps.push(...trade.offerProperties);
 
-    // Transfer cash
     const propMoney = proposer.money - trade.offerCash + trade.requestCash;
     const respMoney = responder.money - trade.requestCash + trade.offerCash;
 
-    // Transfer jail cards
     const propCards = proposer.getOutOfJailCards - trade.offerCards + trade.requestCards;
     const respCards = responder.getOutOfJailCards - trade.requestCards + trade.offerCards;
 
@@ -80,20 +109,25 @@ export const acceptTrade = mutation({
       getOutOfJailCards: respCards,
     });
 
-    // Update board space ownership
-    const newSpaces = game.boardSpaces.map(s => {
-      if (trade.offerProperties.includes(s.position)) return { ...s, ownerId: trade.responderId };
-      if (trade.requestProperties.includes(s.position)) return { ...s, ownerId: trade.proposerId };
-      return s;
-    });
-    await ctx.db.patch(trade.gameId, { boardSpaces: newSpaces });
+    for (const pos of trade.offerProperties) {
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space) await ctx.db.patch(space._id, { ownerId: trade.responderId });
+    }
+    for (const pos of trade.requestProperties) {
+      const space = boardSpaces.find(s => s.position === pos);
+      if (space) await ctx.db.patch(space._id, { ownerId: trade.proposerId });
+    }
+
     await ctx.db.patch(tradeId, { status: "accepted" });
   },
 });
 
 export const rejectTrade = mutation({
   args: { tradeId: v.id("trades"), playerId: v.id("players") },
-  handler: async (ctx, { tradeId }) => {
+  handler: async (ctx, { tradeId, playerId }) => {
+    const trade = await ctx.db.get(tradeId);
+    if (!trade || trade.status !== "pending") throw new Error("Trade not available");
+    if (trade.responderId !== playerId) throw new Error("Not your trade");
     await ctx.db.patch(tradeId, { status: "rejected" });
   },
 });
