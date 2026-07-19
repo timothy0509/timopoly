@@ -36,6 +36,12 @@ export default defineSchema({
       expiresAt: v.number(),
     })),
     createdAt: v.number(),
+    // Deprecated legacy fields -- kept for schema compatibility with
+    // existing documents that still have stale embedded data. Code
+    // reads boardSpaces and chatLog from the boardSpaces and
+    // chatMessages tables respectively.
+    boardSpaces: v.optional(v.any()),
+    chatLog: v.optional(v.any()),
   }).index("by_code", ["code"]),
 
   boardSpaces: defineTable({
